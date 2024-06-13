@@ -1,15 +1,18 @@
-let intervalId = null;
 const defaultUrl = 'https://sheilta.apps.openu.ac.il/pls/dmyopt2/myop.myop_screen';
 const defaultDomain = new URL(defaultUrl).hostname;
+let intervalId = null;
 
 chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
   if (request.action === 'start') {
     const url = request.url || defaultUrl;
-    const interval = request.interval || 1500000; // Default to 25 minutes
+    const interval = request.interval || 1200000; // Default to 20 minutes
 
-       if (intervalId !== null) {
+    if (intervalId !== null) {
       clearInterval(intervalId);
     }
+
+    // Set initial expiration for session cookies to 24 hours from now
+    setInitialCookieExpiration(defaultDomain);
 
     intervalId = setInterval(() => {
       chrome.tabs.query({ currentWindow: true }, (tabs) => {
@@ -17,15 +20,12 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
           const tabUrl = new URL(tab.url);
           return tabUrl.hostname === defaultDomain;
         });
-      
+
         if (tab) {
           const tabId = tab.id;
           chrome.tabs.update(tabId, { active: true }, () => {
-            // Perform additional interaction to keep the session alive
-            chrome.scripting.executeScript({
-              target: { tabId: tabId },
-              function: simulateInteraction,
-            });
+            // Check and extend session cookies that expire within the next hour
+            extendExpiringCookies(defaultDomain);
           });
         }
       });
@@ -56,7 +56,53 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
   }
 });
 
-function simulateInteraction() {
-  // Click on a specific element on the page to keep the session active
-  document.querySelector('button.keep-alive-button').click();
+function setInitialCookieExpiration(domain) {
+  chrome.cookies.getAll({ domain: domain }, (cookies) => {
+    cookies.forEach(cookie => {
+      if (cookie.session && !cookie.expirationDate) {
+        // Set initial expiration for session cookies to 24 hours from now
+        const expirationTime = Date.now() + (24 * 60 * 60 * 1000); // 24 hours in milliseconds
+        chrome.cookies.set({
+          url: `https://${cookie.domain}${cookie.path}`,
+          name: cookie.name,
+          value: cookie.value,
+          expirationDate: expirationTime / 1000, // Convert milliseconds to seconds
+          secure: cookie.secure,
+          httpOnly: cookie.httpOnly,
+          sameSite: cookie.sameSite,
+        });
+        console.log(`Initial expiration set for session cookie ${cookie.name}.`);
+      }
+    });
+  });
+}
+
+function extendExpiringCookies(domain) {
+  chrome.cookies.getAll({ domain: domain }, (cookies) => {
+    cookies.forEach(cookie => {
+      if (cookie.session && cookie.expirationDate) {
+        const expirationTime = cookie.expirationDate * 1000; // Convert seconds to milliseconds
+        const now = Date.now();
+        const timeUntilExpiry = expirationTime - now;
+
+        // Extend expiration for cookies expiring within the next hour by additional two hours
+        const extendThreshold = 60 * 60 * 1000; // 1 hour in milliseconds
+        const extendDuration = 2 * 60 * 60 * 1000; // 2 hours in milliseconds
+
+        if (timeUntilExpiry < extendThreshold) {
+          const newExpirationTime = now + extendDuration;
+          chrome.cookies.set({
+            url: `https://${cookie.domain}${cookie.path}`,
+            name: cookie.name,
+            value: cookie.value,
+            expirationDate: newExpirationTime / 1000,
+            secure: cookie.secure,
+            httpOnly: cookie.httpOnly,
+            sameSite: cookie.sameSite,
+          });
+          console.log(`Session cookie ${cookie.name} extended.`);
+        }
+      }
+    });
+  });
 }

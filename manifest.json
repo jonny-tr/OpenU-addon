@@ -4,7 +4,8 @@
   "version": "1.0",
   "description": "Keep your session alive by sending periodic requests.",
   "permissions": [
-    "storage"
+    "storage",
+    "cookies"
   ],
   "background": {
     "service_worker": "background.js"
