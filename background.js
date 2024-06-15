@@ -1,44 +1,53 @@
 const defaultUrl = 'https://sheilta.apps.openu.ac.il/';
 let url = defaultUrl;
 let keepAlive = 'Stopped';
-let timeoutId = null;
+let iframeElement = null;
 
 /**
- * Performs a long polling request to the specified URL.
+ * Creates an invisible iframe and loads the specified URL.
  *
  * @return {void} This function does not return anything.
  */
-function longPoll() {
+function createIframe() {
     keepAlive = 'Running';
-    fetch(url, {
-        method: 'GET',
-        mode: 'no-cors',
-        credentials: 'include', // To include cookies in the request
-    })
-    .then(() => {
-        console.log("Request sent successfully");
-        timeoutId = setTimeout(longPoll, 15 * 60 * 1000); // Poll every 15 minutes
-    })
-    .catch(error => {
-        console.error("Error: " + error);
-        timeoutId = setTimeout(longPoll, 5 * 1000); // If there's an error, try again after 5 seconds
-    });
+    iframeElement = document.createElement('iframe');
+    iframeElement.src = url;
+    iframeElement.style.display = 'none';
+    document.body.appendChild(iframeElement);
+
+    // Periodically reload the iframe to keep the connection alive
+    setInterval(() => {
+        try {
+            const iframeDoc = iframeElement.contentWindow.document;
+            iframeDoc.open();
+            iframeDoc.close();
+        } catch (error) {
+            console.error("Error reloading iframe: " + error);
+        }
+    }, 5 * 60 * 1000); // Reload every 15 minutes
+}
+
+/**
+ * Removes the invisible iframe from the document.
+ *
+ * @return {void} This function does not return anything.
+ */
+function removeIframe() {
+    keepAlive = 'Stopped';
+    if (iframeElement) {
+        document.body.removeChild(iframeElement);
+        iframeElement = null;
+    }
 }
 
 chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
-    if (request.action === 'start longpoll') {
+    if (request.action === 'start keepalive') {
         url = request.url.match(/apps\.openu\.ac\.il/) ? request.url : defaultUrl;
-        if (timeoutId !== null) {
-            clearTimeout(timeoutId);
-        }
+        removeIframe();
         sendResponse({ status: 'running', url: url });
-        longPoll();
-    } else if (request.action === 'stop longpoll') {
-        keepAlive = 'Stopped';
-        if (timeoutId !== null) {
-            clearTimeout(timeoutId);
-            timeoutId = null;
-        }
+        createIframe();
+    } else if (request.action === 'stop keepalive') {
+        removeIframe();
         sendResponse({ status: 'stopped', url: url });
     } else if (request.action === 'getStatus') {
         sendResponse({ status: keepAlive, url: url });

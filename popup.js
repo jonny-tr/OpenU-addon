@@ -36,11 +36,11 @@ document.addEventListener('DOMContentLoaded', () => {
         const url = urlElement.value || defaultUrl;
 
         if (currentState === 'Stopped') {
-            chrome.runtime.sendMessage({ action: 'start longpoll', url: url }, (response) => {
+            chrome.runtime.sendMessage({ action: 'start keepalive', url: url }, (response) => {
                 updateButton('stop');
             });
         } else if (currentState === 'Running') {
-            chrome.runtime.sendMessage({ action: 'stop longpoll' }, (response) => {
+            chrome.runtime.sendMessage({ action: 'stop keepalive' }, (response) => {
                 updateButton('start');
             });
         }

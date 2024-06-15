@@ -1,6 +1,6 @@
 (function() {
     const url = 'https://sheilta.apps.openu.ac.il/';
-    chrome.runtime.sendMessage({ action: 'start longpoll', url: url }, (response) => {
+    chrome.runtime.sendMessage({ action: 'start keepalive', url: url }, (response) => {
         if (response) {
             console.log(`Keep alive started for URL: ${response.url}`);
         } else {
