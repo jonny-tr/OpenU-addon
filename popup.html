@@ -1,80 +1,68 @@
 <!DOCTYPE html>
 <html lang="en">
-
 <head>
     <title>OpenU Keep Alive</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@400;500&display=swap" rel="stylesheet">
     <style>
         body {
-            width: 240px;
+            width: 250px;
             font-family: 'Roboto', sans-serif;
             text-align: center;
-            background-color: #f5f5f5;
-            color: #333;
-            padding: 20px;
-            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
-            border-radius: 8px;
+            background-color: #f0f0f0;
+            color: #333333;
+            padding: 10px;
             margin: 0;
         }
 
-        h3 {
-            margin: 10px 0;
-            font-weight: normal;
+        .input-container {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin-bottom: 10px;
         }
 
         #url {
-            width: calc(100% - 20px);
-            text-align: center;
-            padding: 8px;
-            margin-bottom: 10px;
+            width: 80%;
+            padding: 8px 12px;
             border: 1px solid #ccc;
             border-radius: 4px;
-            box-sizing: border-box;
+            font-size: 16px;
+        }
+
+        #url::placeholder {
+            color: #999;
         }
 
         #toggle {
             padding: 10px 20px;
             border: none;
             border-radius: 4px;
+            background-color: #0077b6;
+            color: white;
+            font-size: 16px;
             cursor: pointer;
             transition: background-color 0.3s ease;
-            font-size: 14px;
-            margin-top: 10px;
-            width: 100%;
-            box-sizing: border-box;
         }
 
-        #toggle.run {
-            background-color: #28a745;
-            color: white;
-        }
-
-        #toggle.run:hover {
-            background-color: #218838;
-        }
-
-        #toggle.stop {
-            background-color: #dc3545;
-            color: white;
-        }
-
-        #toggle.stop:hover {
-            background-color: #c82333;
+        #toggle:hover {
+            background-color: #005a8c;
         }
 
         #status {
-            display: block;
-            margin-top: 10px;
             font-size: 14px;
             color: #666;
+            margin-top: 20px; /* Increased margin-top for more padding */
         }
     </style>
 </head>
-
 <body>
-    <h3>Status<span id='status'>Stopped</span></h3>
-    <input type='text' id='url' placeholder='URL' />
-    <button id='toggle' class="run">Start</button>
-    <script src='popup.js'></script>
+    <div class="input-container">
+        <input type="text" id="url" placeholder="Enter URL" />
+        <button id="toggle">&#9658;</button>
+    </div>
+    <span id="status">Stopped</span>
+    <script src="popup.js"></script>
 </body>
-
 </html>
