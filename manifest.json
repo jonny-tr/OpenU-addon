@@ -4,7 +4,13 @@
     "version": "1.0",
     "description": "Keep your session alive by sending periodic requests.",
     "permissions": [
-        "storage"
+        "storage",
+        "activeTab",
+        "cookies",
+        "tabs"
+    ],
+    "host_permissions": [
+        "*://*.apps.openu.ac.il/*"
     ],
     "content_scripts": [
         {
@@ -13,7 +19,8 @@
             ],
             "js": [
                 "content.js"
-            ]
+            ],
+            "run_at": "document_start"
         }
     ],
     "background": {

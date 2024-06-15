@@ -15,14 +15,14 @@ function longPoll() {
         mode: 'no-cors',
         credentials: 'include', // To include cookies in the request
     })
-        .then(() => {
-            console.log("Request sent successfully");
-            timeoutId = setTimeout(longPoll, 15 * 60 * 1000); // Poll every 15 minutes
-        })
-        .catch(error => {
-            console.error("Error: " + error);
-            timeoutId = setTimeout(longPoll, 5 * 1000); // If there's an error, try again after 5 seconds
-        });
+    .then(() => {
+        console.log("Request sent successfully");
+        timeoutId = setTimeout(longPoll, 15 * 60 * 1000); // Poll every 15 minutes
+    })
+    .catch(error => {
+        console.error("Error: " + error);
+        timeoutId = setTimeout(longPoll, 5 * 1000); // If there's an error, try again after 5 seconds
+    });
 }
 
 chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
