@@ -1,45 +1,51 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
+
 <head>
-  <title>OpenU Keep Alive</title>
-  <style>
-    body {
-      width: 200px;
-      font-family: "Calibri Light", sans-serif;
-      text-align: center; /* Center the content horizontally */
-    }
-    h3 {
-      margin: 5px 0;
-    }
-    #url {
-      width: calc(100% - 4px); /* Width minus 2px margin on each side */
-      margin-bottom: 5px; /* Space below the URL input box */
-      box-sizing: border-box; /* Include padding and border in the element's total width and height */
-    }
-    button {
-      border-radius: 10px; /* Rounded corners for buttons */
-      padding: 5px 10px; /* Padding for buttons */
-      margin: 2px; /* Margin for buttons */
-      cursor: pointer; /* Cursor changes to pointer on hover */
-    }
-    #status {
-      font-weight: bold;
-      font-size: 16px;
-    }
-    .running {
-      color: green;
-    }
-    .stopped {
-      color: gray;
-    }
-  </style>
+    <title>OpenU Keep Alive</title>
+    <style>
+        body {
+            width: 200px;
+            font-family: 'Calibri Light', sans-serif;
+            text-align: center;
+            background-color: azure;
+        }
+
+        h3 {
+            margin: 5px 0;
+        }
+
+        #url {
+            width: calc(90% - 10px);
+            text-align: center;
+            margin-bottom: 5px;
+            box-sizing: border-box; /* Include padding and border in the element's total width and height */
+        }
+
+        button {
+            border-radius: 6px; /* Rounded corners */
+            border-color: lightgray;
+            margin: 2px;
+            cursor: pointer; /* Cursor changes to pointer on hover */
+        }
+
+        .running {
+        background-color: green;
+        color: white;
+        }
+
+        .stopped {
+            background-color: red;
+            color: white;
+     }
+    </style>
 </head>
+
 <body>
-  <h3>OpenU Keep Alive</h3>
-  <input type="text" id="url" placeholder="OpenU" />
-  <button id="start">Start</button>
-  <button id="stop">Stop</button>
-  <div id="status"></div>
-  <script src="popup.js"></script>
+    <h3>Status: <span id='status'>Stopped</span></h3>
+    <input type='text' id='url' placeholder='URL' />
+    <button id='toggle'>Start</button>
+    <script src='popup.js'></script>
 </body>
+
 </html>
