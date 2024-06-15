@@ -5,46 +5,74 @@
     <title>OpenU Keep Alive</title>
     <style>
         body {
-            width: 200px;
-            font-family: 'Calibri Light', sans-serif;
+            width: 240px;
+            font-family: 'Roboto', sans-serif;
             text-align: center;
-            background-color: azure;
+            background-color: #f5f5f5;
+            color: #333;
+            padding: 20px;
+            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+            border-radius: 8px;
+            margin: 0;
         }
 
         h3 {
-            margin: 5px 0;
+            margin: 10px 0;
+            font-weight: normal;
         }
 
         #url {
-            width: calc(90% - 10px);
-            text-align: center;
-            margin-bottom: 5px;
-            box-sizing: border-box; /* Include padding and border in the element's total width and height */
+            width: calc(100% - 20px);
+            padding: 8px;
+            margin-bottom: 10px;
+            border: 1px solid #ccc;
+            border-radius: 4px;
+            box-sizing: border-box;
         }
 
         button {
-            border-radius: 6px; /* Rounded corners */
-            border-color: lightgray;
-            margin: 2px;
-            cursor: pointer; /* Cursor changes to pointer on hover */
+            padding: 10px 20px;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            transition: background-color 0.3s ease;
+            font-size: 14px;
+            margin-top: 10px;
+            width: 100%;
+            box-sizing: border-box;
         }
 
-        .run {
-            background-color: lightgreen;
+        button.run {
+            background-color: #28a745;
             color: white;
         }
 
-        .stop {
-            background-color: lightcoral;
+        button.run:hover {
+            background-color: #218838;
+        }
+
+        button.stop {
+            background-color: #dc3545;
             color: white;
-     }
+        }
+
+        button.stop:hover {
+            background-color: #c82333;
+        }
+
+        #status {
+            display: block;
+            margin-top: 10px;
+            font-size: 14px;
+            color: #666;
+        }
     </style>
 </head>
 
 <body>
     <h3>Status<span id='status'>: stopped</span></h3>
     <input type='text' id='url' placeholder='URL' />
-    <button id='toggle'>Start</button>
+    <button id='toggle' class="run">Start</button>
     <script src='popup.js'></script>
 </body>
 

@@ -6,54 +6,50 @@
  */
 document.addEventListener('DOMContentLoaded', () => {
     const toggleButton = document.getElementById('toggle');
-    let url = document.getElementById('url').value
-                || 'https://sheilta.apps.openu.ac.il/';
+    const urlInput = document.getElementById('url');
 
     /**
      * Updates the toggle button text and click event handler based on the action.
      *
      * @function updateButton
-     * @param {string} action - The action to perform ('Start' or 'Stop').
+     * @param {string} action - The action to perform ('start' or 'stop').
      */
     function updateButton(action) {
         if (action === 'stop') {
             toggleButton.classList.remove('run');
             toggleButton.classList.add('stop');
             toggleButton.textContent = 'Stop';
-            document.getElementById('status').innerText = ': stopped';
+            document.getElementById('status').innerText = 'Running';
         } else {
             toggleButton.classList.remove('stop');
             toggleButton.classList.add('run');
             toggleButton.textContent = 'Start';
-            document.getElementById('status').innerText = ': running';
-
+            document.getElementById('status').innerText = 'Stopped';
         }
     }
 
     // Get the current status from the background script
-    (function getStatus() {
+    function getStatus() {
         chrome.runtime.sendMessage({ action: 'getStatus' }, (response) => {
-            document.getElementById('url').value = response.url;
-            if (response.status === 'Running') {
+            urlInput.value = response.url;
+            if (response.status === 'running') {
                 updateButton('stop');
-                return 'Running';
-            }
-            else {
+            } else {
                 updateButton('start');
-                return 'Stopped';
             }
         });
-    })();
+    }
+
+    // Initialize the popup with the current status
+    getStatus();
 
     toggleButton.addEventListener('click', () => {
-        console.log('Button clicked');
-        let state = getStatus();
-        if (state === 'Stopped') {
+        const url = urlInput.value || 'https://sheilta.apps.openu.ac.il/';
+        if (toggleButton.textContent === 'Start') {
             chrome.runtime.sendMessage({ action: 'start longpoll', url: url }, (response) => {
                 updateButton('stop');
             });
-        }
-        else if (state === 'Running') {
+        } else if (toggleButton.textContent === 'Stop') {
             chrome.runtime.sendMessage({ action: 'stop longpoll' }, (response) => {
                 updateButton('start');
             });
