@@ -16,23 +16,27 @@ function longPoll() {
     })
         .then(() => {
             console.log("Request sent successfully");
-            setTimeout(longPoll, 15 * 60 * 1000); // Poll every 15 minutes
+            timeoutId = setTimeout(longPoll, 15 * 60 * 1000); // Poll every 15 minutes
         })
         .catch(error => {
             console.error("Error: " + error);
-            setTimeout(longPoll, 5 * 1000); // If there's an error, try again 
+            timeoutId = setTimeout(longPoll, 5 * 1000); // If there's an error, try again 
         });
 }
 
 chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
-    if (!userUrl.match(/apps\.openu\.ac\.il/)) {
+    if (!request.url.match(/apps\.openu\.ac\.il/)) {
         url = request.url;
     }
-    if (request.action === 'start') {
+    if (request.action === 'start longpoll') {
+        sendResponse({ state : 'Running', url: url });
         longPoll();
     }
-    else if (request.action === 'stop') {
+    else if (request.action === 'stop longpoll') {
         keepAlive = 'Stopped';
+        clearTimeout(timeoutId);
+        timeoutId = null;
+        sendResponse({ state : 'Stopped', url: url });
     }
     else if (request.action === 'getStatus') {
         sendResponse({ status: keepAlive });

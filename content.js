@@ -1,4 +1,4 @@
 (function start() {
-    let url = 'https://sheilta.apps.openu.ac.il/';
-    chrome.runtime.sendMessage({ action: 'start', url: url }, (response))
+const url = 'https://sheilta.apps.openu.ac.il/';
+chrome.runtime.sendMessage({ action: 'start longpoll', url: url }, (response))
 })();
