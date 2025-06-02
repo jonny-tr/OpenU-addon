@@ -19,13 +19,13 @@
                 "*://*.apps.openu.ac.il/*"
             ],
             "js": [
-                "content.js"
+                "dist/content.js"
             ],
             "run_at": "document_start"
         }
     ],
     "background": {
-        "service_worker": "background.js"
+        "service_worker": "dist/background.js"
     },
     "action": {
         "default_popup": "popup.html",

@@ -1,0 +1,14 @@
+{
+  "name": "openu-keepalive-extension",
+  "version": "1.0.0",
+  "description": "Keep your session alive by sending periodic requests",  "scripts": {
+    "build": "tsc",
+    "watch": "tsc --watch",
+    "clean": "rmdir /s /q dist 2>nul || true",
+    "dev": "tsc --watch"
+  },
+  "devDependencies": {
+    "@types/chrome": "^0.0.270",
+    "typescript": "^5.4.5"
+  }
+}
