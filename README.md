@@ -20,6 +20,14 @@ A Chromium extension for the OpenU website that just makes it better.
 - **Visibility Handling**: Restarts when page becomes visible
 - **Smart URL Tracking**: Uses current page URL for better session management
 
+## Usage
+1. Open Chrome (chrome://extensions) or Edge (edge://extensions) in your browser.
+2. Toggle **Developer mode** on (switch in the top-right corner).
+3. Click **Load unpacked** and select the project’s root directory (where `manifest.json` is located).
+4. Verify the extension appears in the list and is enabled.
+5. Click the extension’s icon in the toolbar to open the popup.
+6. If you're making code changes, click the reload (⟲) button on the extension card to apply your updates.
+
 ## Development
 
 This project is written in TypeScript.
