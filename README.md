@@ -39,14 +39,25 @@ This project is written in TypeScript.
    ```
 
 3. For development with auto-compilation:
-   ```bash
-   npm run dev
-   ```
+```bash
+npm run dev
+```
 
 ### Project Structure
 ```
 project-root/
 ├── src/
+│   ├── background.ts       # Advanced service worker with SessionManager
+│   ├── content.ts          # Smart content script with domain detection
+│   ├── popup.ts            # Enhanced popup UI with health indicators
+│   └── types.ts            # Shared TypeScript interfaces
+├── dist/                   # Compiled JavaScript files
+├── assets/                 # Static assets (icons, styles)
+├── popup.html              # Extension popup UI
+├── manifest.json           # Extension manifest
+├── LICENSE                 # License file
+└── README.md               # Project README
+```  
 │   ├── background.ts      # Advanced service worker with SessionManager
 │   ├── content.ts         # Smart content script with domain detection
 │   ├── popup.ts          # Enhanced popup UI with health indicators
