@@ -1,4 +1,3 @@
-// Define types inline to avoid module imports in content script
 interface StartKeepAliveMessage {
     action: 'start keepalive';
     url: string;
@@ -11,7 +10,7 @@ interface KeepAliveResponse {
 }
 
 (function(): void {
-    // Only auto-start on the main OpenU domain
+    // Only auto-start on internal user OpenU domains
     const currentUrl = window.location.href;
     const isOpenUDomain = currentUrl.includes('apps.openu.ac.il');
     
@@ -23,7 +22,7 @@ interface KeepAliveResponse {
     // Use the current page URL for more accurate session tracking
     const url: string = window.location.origin + '/';
     
-    console.log('OpenU page detected, starting keep-alive for:', url);
+    console.log('OpenU page detected, starting keep-alive for: ', url);
 
     chrome.runtime.sendMessage(
         { action: 'start keepalive', url: url } as StartKeepAliveMessage,
