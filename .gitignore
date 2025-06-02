@@ -4,3 +4,5 @@ dist/
 *.log
 .DS_Store
 Thumbs.db
+DEBUGGING_GUIDE.md
+TESTING_INSTRUCTIONS.md

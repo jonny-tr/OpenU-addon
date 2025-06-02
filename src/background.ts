@@ -36,6 +36,81 @@ let currentPingFrequency: number = 4; // in minutes
 let sessionActive: boolean = false;
 const MAX_CONSECUTIVE_FAILURES = 3;
 
+// Persistence manager to handle service worker restarts
+class PersistenceManager {
+    private static readonly STORAGE_KEYS = {
+        KEEP_ALIVE_STATE: 'keepAliveState',
+        URL: 'keepAliveUrl',
+        FAILURES: 'consecutiveFailures',
+        LAST_PING: 'lastPingTime',
+        FREQUENCY: 'pingFrequency',
+        SESSION_ACTIVE: 'sessionActive'
+    };
+
+    static async saveState(): Promise<void> {
+        try {
+            await chrome.storage.local.set({
+                [this.STORAGE_KEYS.KEEP_ALIVE_STATE]: keepAlive,
+                [this.STORAGE_KEYS.URL]: url,
+                [this.STORAGE_KEYS.FAILURES]: consecutiveFailures,
+                [this.STORAGE_KEYS.LAST_PING]: lastPingTime,
+                [this.STORAGE_KEYS.FREQUENCY]: currentPingFrequency,
+                [this.STORAGE_KEYS.SESSION_ACTIVE]: sessionActive
+            });
+            console.log('📄 State saved to storage');
+        } catch (error) {
+            console.error('❌ Failed to save state:', error);
+        }
+    }
+
+    static async loadState(): Promise<void> {
+        try {
+            const result = await chrome.storage.local.get([
+                this.STORAGE_KEYS.KEEP_ALIVE_STATE,
+                this.STORAGE_KEYS.URL,
+                this.STORAGE_KEYS.FAILURES,
+                this.STORAGE_KEYS.LAST_PING,
+                this.STORAGE_KEYS.FREQUENCY,
+                this.STORAGE_KEYS.SESSION_ACTIVE
+            ]);
+
+            keepAlive = result[this.STORAGE_KEYS.KEEP_ALIVE_STATE] || 'Stopped';
+            url = result[this.STORAGE_KEYS.URL] || defaultUrl;
+            consecutiveFailures = result[this.STORAGE_KEYS.FAILURES] || 0;
+            lastPingTime = result[this.STORAGE_KEYS.LAST_PING] || '';
+            currentPingFrequency = result[this.STORAGE_KEYS.FREQUENCY] || 4;
+            sessionActive = result[this.STORAGE_KEYS.SESSION_ACTIVE] || false;
+
+            console.log('📄 State loaded from storage:', {
+                keepAlive,
+                url,
+                consecutiveFailures,
+                lastPingTime,
+                currentPingFrequency,
+                sessionActive
+            });
+        } catch (error) {
+            console.error('❌ Failed to load state:', error);
+        }
+    }
+
+    static async clearState(): Promise<void> {
+        try {
+            await chrome.storage.local.remove([
+                this.STORAGE_KEYS.KEEP_ALIVE_STATE,
+                this.STORAGE_KEYS.URL,
+                this.STORAGE_KEYS.FAILURES,
+                this.STORAGE_KEYS.LAST_PING,
+                this.STORAGE_KEYS.FREQUENCY,
+                this.STORAGE_KEYS.SESSION_ACTIVE
+            ]);
+            console.log('📄 State cleared from storage');
+        } catch (error) {
+            console.error('❌ Failed to clear state:', error);
+        }
+    }
+}
+
 /**
  * Advanced session management with smart retry logic and failure handling.
  */
@@ -97,38 +172,42 @@ class SessionManager {
                 }
             });
             
-            console.log(`Keep-alive ping: ${response.status} - ${lastPingTime}`);
+            console.log(`🔄 Keep-alive ping: ${response.status} - ${lastPingTime}`);
             
             if (response.ok) {
                 consecutiveFailures = 0;
                 sessionActive = true;
                 currentPingFrequency = 4; // Reset to normal frequency
+                await PersistenceManager.saveState(); // Save successful state
                 return true;
             }
             
             // Handle different error cases
             if (response.status === 401 || response.status === 403) {
-                console.log('Session expired, attempting to refresh');
+                console.log('🔐 Session expired, attempting to refresh');
                 sessionActive = false;
                 await this.attemptSessionRefresh();
+                await PersistenceManager.saveState();
                 return false;
             }
             
             consecutiveFailures++;
             sessionActive = false;
+            await PersistenceManager.saveState();
             return false;
             
         } catch (error) {
             consecutiveFailures++;
             sessionActive = false;
-            console.error(`Keep-alive ping failed (${consecutiveFailures}/${MAX_CONSECUTIVE_FAILURES}):`, error);
+            console.error(`❌ Keep-alive ping failed (${consecutiveFailures}/${MAX_CONSECUTIVE_FAILURES}):`, error);
             
             // If we have too many failures, check if we should stop
             if (consecutiveFailures >= MAX_CONSECUTIVE_FAILURES) {
-                console.warn('Too many consecutive failures, session may be lost');
+                console.warn('⚠️ Too many consecutive failures, session may be lost');
                 currentPingFrequency = 8; // Increase frequency on persistent failures
             }
             
+            await PersistenceManager.saveState();
             return false;
         }
     }
@@ -151,55 +230,96 @@ class SessionManager {
 }
 
 /**
- * Starts the keep-alive mechanism using periodic fetch requests.
- * This approach is more efficient and reliable than iframe manipulation.
+ * Starts the keep-alive mechanism using Chrome alarms for reliability.
+ * This approach survives service worker restarts better than setInterval.
  */
-function startKeepAlive(): void {
+async function startKeepAlive(): Promise<void> {
     keepAlive = 'Running';
     consecutiveFailures = 0;
     
-    // Clear any existing interval
+    // Clear any existing alarms and intervals
+    await chrome.alarms.clear('keepAlive');
     if (keepAliveInterval) {
         clearInterval(keepAliveInterval);
+        keepAliveInterval = null;
     }
 
     const sessionManager = SessionManager.getInstance();
 
     // Function to ping the server with smart retry logic
     const pingServer = async (): Promise<void> => {
+        console.log('🔄 Executing scheduled ping...');
         await sessionManager.smartPing();
-          // Adjust ping frequency based on failures
+        
+        // Adjust ping frequency based on failures
         if (consecutiveFailures >= MAX_CONSECUTIVE_FAILURES) {
-            // Reduce frequency when having issues
-            console.log('Reducing ping frequency due to consecutive failures');
-            clearInterval(keepAliveInterval!);
+            console.log('⚠️ Reducing ping frequency due to consecutive failures');
             currentPingFrequency = 8; // 8 minutes
-            keepAliveInterval = setInterval(pingServer, currentPingFrequency * 60 * 1000);
+            await setupNextAlarm();
         }
     };
 
     // Start with an immediate ping
-    pingServer();    // Set up periodic pings every 4 minutes (typical session timeout is 5-10 minutes)
-    currentPingFrequency = 4;
-    keepAliveInterval = setInterval(pingServer, currentPingFrequency * 60 * 1000);
+    await pingServer();
     
-    console.log('Keep-alive started with advanced session management');
+    // Set up the next alarm
+    await setupNextAlarm();
+    
+    // Save state to persist across service worker restarts
+    await PersistenceManager.saveState();
+    
+    console.log('🚀 Keep-alive started with Chrome alarms and persistence');
+}
+
+/**
+ * Sets up the next Chrome alarm for keep-alive pings
+ */
+async function setupNextAlarm(): Promise<void> {
+    await chrome.alarms.clear('keepAlive');
+    await chrome.alarms.create('keepAlive', {
+        delayInMinutes: currentPingFrequency
+    });
+    console.log(`⏰ Next ping scheduled in ${currentPingFrequency} minutes`);
 }
 
 /**
  * Stops the keep-alive mechanism and cleans up resources.
  */
-function stopKeepAlive(): void {
+async function stopKeepAlive(): Promise<void> {
     keepAlive = 'Stopped';
     
-    // Clear interval
+    // Clear alarms and intervals
+    await chrome.alarms.clear('keepAlive');
     if (keepAliveInterval) {
         clearInterval(keepAliveInterval);
         keepAliveInterval = null;
     }
 
-    console.log('Keep-alive stopped');
+    // Save stopped state
+    await PersistenceManager.saveState();
+
+    console.log('🛑 Keep-alive stopped and state saved');
 }
+
+// Chrome alarms listener for keep-alive pings
+chrome.alarms.onAlarm.addListener(async (alarm) => {
+    if (alarm.name === 'keepAlive') {
+        console.log('⏰ Alarm triggered: executing keep-alive ping');
+        
+        // Load current state in case service worker restarted
+        await PersistenceManager.loadState();
+        
+        if (keepAlive === 'Running') {
+            const sessionManager = SessionManager.getInstance();
+            await sessionManager.smartPing();
+            
+            // Schedule next ping
+            await setupNextAlarm();
+        } else {
+            console.log('⚠️ Keep-alive is stopped, not executing ping');
+        }
+    }
+});
 
 // Message listener for popup communication
 chrome.runtime.onMessage.addListener((
@@ -207,73 +327,135 @@ chrome.runtime.onMessage.addListener((
     sender: chrome.runtime.MessageSender,
     sendResponse: (response: KeepAliveResponse | DetailedStatusResponse) => void
 ): boolean => {
-    console.log('Background received message:', request);
+    console.log('📨 Background received message:', request);
     
-    if (request.action === 'start keepalive') {
-        url = request.url?.match(/apps\.openu\.ac\.il/) ? request.url : defaultUrl;
-        console.log('Starting keep-alive with URL:', url);
+    (async () => {
+        // Load current state for all operations
+        await PersistenceManager.loadState();
         
-        // Stop any existing keep-alive first
-        stopKeepAlive();
-        
-        // Start the new keep-alive
-        startKeepAlive();
-        
-        const response = { 
-            status: 'running' as const, 
-            url: url,
-            consecutiveFailures,
-            sessionActive,
-            lastPing: lastPingTime
-        };
-        console.log('Sending start response:', response);
-        sendResponse(response);
-        
-    } else if (request.action === 'stop keepalive') {
-        console.log('Stopping keep-alive');
-        stopKeepAlive();
-        const response = { 
+        if (request.action === 'start keepalive') {
+            url = request.url?.match(/apps\.openu\.ac\.il/) ? request.url : defaultUrl;
+            console.log('🚀 Starting keep-alive with URL:', url);
+            
+            // Stop any existing keep-alive first
+            await stopKeepAlive();
+            
+            // Start the new keep-alive
+            await startKeepAlive();
+            
+            const response = { 
+                status: 'running' as const, 
+                url: url,
+                consecutiveFailures,
+                sessionActive,
+                lastPing: lastPingTime
+            };
+            console.log('📤 Sending start response:', response);
+            sendResponse(response);
+            
+        } else if (request.action === 'stop keepalive') {
+            console.log('🛑 Stopping keep-alive');
+            await stopKeepAlive();
+            const response = { 
+                status: 'stopped' as const, 
+                url: url,
+                consecutiveFailures,
+                sessionActive: false,
+                lastPing: lastPingTime
+            };
+            console.log('📤 Sending stop response:', response);
+            sendResponse(response);
+            
+        } else if (request.action === 'getStatus') {
+            const response = { 
+                status: keepAlive.toLowerCase() as 'running' | 'stopped', 
+                url: url,
+                consecutiveFailures,
+                sessionActive,
+                lastPing: lastPingTime
+            };
+            console.log('📤 Sending status response:', response);
+            sendResponse(response);
+            
+        } else if (request.action === 'getDetailedStatus') {
+            const detailedResponse: DetailedStatusResponse = {
+                status: keepAlive.toLowerCase() as 'running' | 'stopped',
+                url: url,
+                consecutiveFailures,
+                sessionActive,
+                lastPing: lastPingTime,
+                pingFrequency: currentPingFrequency
+            };
+            sendResponse(detailedResponse);
+        }
+    })().catch(error => {
+        console.error('❌ Error handling message:', error);
+        sendResponse({ 
             status: 'stopped' as const, 
-            url: url,
-            consecutiveFailures,
+            url: url || defaultUrl,
+            consecutiveFailures: 999,
             sessionActive: false,
-            lastPing: lastPingTime
-        };
-        console.log('Sending stop response:', response);
-        sendResponse(response);
-        
-    } else if (request.action === 'getStatus') {
-        const response = { 
-            status: keepAlive.toLowerCase() as 'running' | 'stopped', 
-            url: url,
-            consecutiveFailures,
-            sessionActive,
-            lastPing: lastPingTime
-        };
-        console.log('Sending status response:', response);
-        sendResponse(response);
-        
-    } else if (request.action === 'getDetailedStatus') {        const detailedResponse: DetailedStatusResponse = {
-            status: keepAlive.toLowerCase() as 'running' | 'stopped',
-            url: url,
-            consecutiveFailures,
-            sessionActive,
-            lastPing: lastPingTime,
-            pingFrequency: currentPingFrequency
-        };
-        sendResponse(detailedResponse);
-    }
+            lastPing: ''
+        });
+    });
     
     // Return true to indicate we will send a response asynchronously
     return true;
 });
 
-// Keep the service worker alive by handling extension startup
-chrome.runtime.onStartup.addListener(() => {
+// Service worker lifecycle management
+chrome.runtime.onStartup.addListener(async () => {
     console.log('🚀 Extension started (browser startup)');
+    await restoreStateAndResume();
 });
 
-chrome.runtime.onInstalled.addListener((details) => {
+chrome.runtime.onInstalled.addListener(async (details) => {
     console.log('🚀 Extension installed/updated:', details.reason);
+    
+    if (details.reason === 'install') {
+        console.log('🆕 First time installation');
+        await PersistenceManager.clearState();
+    } else if (details.reason === 'update') {
+        console.log('🔄 Extension updated, restoring state');
+        await restoreStateAndResume();
+    }
+    
     console.log('📊 Initial state:', { keepAlive, url, consecutiveFailures });
 });
+
+// Restore state when service worker restarts
+async function restoreStateAndResume(): Promise<void> {
+    try {
+        await PersistenceManager.loadState();
+        
+        console.log('🔄 Service worker restarted, restored state:', {
+            keepAlive,
+            url,
+            consecutiveFailures,
+            sessionActive,
+            lastPingTime,
+            currentPingFrequency
+        });
+        
+        // If keep-alive was running, resume it
+        if (keepAlive === 'Running') {
+            console.log('▶️ Resuming keep-alive after service worker restart');
+            
+            // Check if there's already an active alarm
+            const existingAlarm = await chrome.alarms.get('keepAlive');
+            if (!existingAlarm) {
+                console.log('⏰ No existing alarm found, setting up new one');
+                await setupNextAlarm();
+            } else {
+                console.log('⏰ Existing alarm found, will continue when it fires');
+            }
+        }
+    } catch (error) {
+        console.error('❌ Failed to restore state:', error);
+    }
+}
+
+// Initialize on script load (for service worker restart)
+(async () => {
+    await restoreStateAndResume();
+})();
