@@ -57,17 +57,6 @@ project-root/
 ├── manifest.json           # Extension manifest
 ├── LICENSE                 # License file
 └── README.md               # Project README
-```  
-│   ├── background.ts      # Advanced service worker with SessionManager
-│   ├── content.ts         # Smart content script with domain detection
-│   ├── popup.ts          # Enhanced popup UI with health indicators
-│   └── types.ts          # Shared TypeScript interfaces
-├── dist/                 # Compiled files
-├── popup.html            # Extension popup UI with modern styling
-├── popup-preview.html    # Preview version for development testing
-├── manifest.json         # Extension manifest
-├── FRONTEND_ENHANCEMENT.md  # Documentation of UI enhancements
-└── README.md
 ```
 
 ### Testing the Extension
