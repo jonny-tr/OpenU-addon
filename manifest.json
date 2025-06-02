@@ -2,14 +2,14 @@
     "manifest_version": 3,
     "name": "Keep Alive",
     "version": "1.0",
-    "description": "Keep your session alive by sending periodic requests.",
-    "permissions": [
+    "description": "Keep your session alive by sending periodic requests.",    "permissions": [
         "storage",
         "activeTab",
         "cookies",
         "tabs",
         "webNavigation",
-        "alarms"
+        "alarms",
+        "idle"
     ],
     "host_permissions": [
         "*://*.apps.openu.ac.il/*"

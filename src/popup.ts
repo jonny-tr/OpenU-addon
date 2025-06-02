@@ -1,7 +1,10 @@
 // Define types inline to avoid module imports
+type AutoDisconnectMode = 'disabled' | '4hours' | '8hours' | 'logout';
+
 interface KeepAliveMessage {
-    action: 'start keepalive' | 'stop keepalive' | 'getStatus' | 'getDetailedStatus';
+    action: 'start keepalive' | 'stop keepalive' | 'getStatus' | 'getDetailedStatus' | 'setAutoDisconnect' | 'getAutoDisconnect';
     url?: string;
+    autoDisconnect?: AutoDisconnectMode;
 }
 
 interface KeepAliveResponse {
@@ -10,6 +13,7 @@ interface KeepAliveResponse {
     consecutiveFailures?: number;
     sessionActive?: boolean;
     lastPing?: string;
+    autoDisconnect?: AutoDisconnectMode;
 }
 
 interface DetailedStatusResponse extends KeepAliveResponse {
@@ -17,24 +21,31 @@ interface DetailedStatusResponse extends KeepAliveResponse {
     sessionActive: boolean;
     lastPing: string;
     pingFrequency: number; // in minutes
+    autoDisconnect: AutoDisconnectMode;
+}
+
+interface AutoDisconnectResponse {
+    success?: boolean;
+    autoDisconnect: AutoDisconnectMode;
 }
 
 document.addEventListener('DOMContentLoaded', (): void => {
     console.log('Popup script loaded and DOM ready');
-    
-    const toggleButton = document.getElementById('toggle') as HTMLButtonElement;
+      const toggleButton = document.getElementById('toggle') as HTMLButtonElement;
     const statusElement = document.getElementById('status') as HTMLSpanElement;
     const urlElement = document.getElementById('url') as HTMLInputElement;
     const healthIndicator = document.getElementById('health-indicator') as HTMLDivElement;
     const detailedStatus = document.getElementById('detailed-status') as HTMLDivElement;
+    const autoDisconnectSelect = document.getElementById('auto-disconnect-select') as HTMLSelectElement;
     const defaultUrl: string = 'https://sheilta.apps.openu.ac.il/pls/dmyopt2/myop.myop_screen';
 
-    console.log('🔧 All DOM elements found:', {
+    console.log('All DOM elements found:', {
         toggleButton: !!toggleButton,
         statusElement: !!statusElement,
         urlElement: !!urlElement,
         healthIndicator: !!healthIndicator,
-        detailedStatus: !!detailedStatus
+        detailedStatus: !!detailedStatus,
+        autoDisconnectSelect: !!autoDisconnectSelect
     });
 
     function updateButton(status: string): void {
@@ -156,8 +167,41 @@ document.addEventListener('DOMContentLoaded', (): void => {
                     toggleButton.disabled = false;
                 }
             );
-        }
+        }    });    // Auto-disconnect dropdown functionality
+    function loadAutoDisconnectSetting(): void {
+        chrome.runtime.sendMessage(
+            { action: 'getAutoDisconnect' } as KeepAliveMessage,
+            (response: AutoDisconnectResponse) => {
+                if (chrome.runtime.lastError) {
+                    console.error('Failed to get auto-disconnect setting:', chrome.runtime.lastError);
+                    return;
+                }
+                autoDisconnectSelect.value = response.autoDisconnect;
+                console.log('Auto-disconnect setting loaded:', response.autoDisconnect);
+            }
+        );
+    }
+
+    autoDisconnectSelect.addEventListener('change', (): void => {
+        const mode = autoDisconnectSelect.value as AutoDisconnectMode;
+        console.log('Auto-disconnect mode changed:', mode);
+        
+        chrome.runtime.sendMessage(
+            { action: 'setAutoDisconnect', autoDisconnect: mode } as KeepAliveMessage,
+            (response: AutoDisconnectResponse) => {
+                if (chrome.runtime.lastError) {
+                    console.error('Failed to set auto-disconnect:', chrome.runtime.lastError);
+                    // Revert dropdown state on error
+                    loadAutoDisconnectSetting();
+                    return;
+                }
+                console.log('Auto-disconnect setting saved:', response.autoDisconnect);
+            }
+        );
     });
+
+    // Load initial auto-disconnect setting
+    loadAutoDisconnectSetting();
 
     // Auto-refresh status every 30 seconds when running
     setInterval(() => {

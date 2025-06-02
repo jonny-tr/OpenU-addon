@@ -1,7 +1,8 @@
 // Define types inline to avoid module imports
 interface KeepAliveMessage {
-    action: 'start keepalive' | 'stop keepalive' | 'getStatus' | 'getDetailedStatus';
+    action: 'start keepalive' | 'stop keepalive' | 'getStatus' | 'getDetailedStatus' | 'setAutoDisconnect' | 'getAutoDisconnect';
     url?: string;
+    autoDisconnect?: 'disabled' | '4hours' | '8hours' | 'logout';
 }
 
 interface KeepAliveResponse {
@@ -10,6 +11,7 @@ interface KeepAliveResponse {
     consecutiveFailures?: number;
     sessionActive?: boolean;
     lastPing?: string;
+    autoDisconnect?: 'disabled' | '4hours' | '8hours' | 'logout';
 }
 
 interface DetailedStatusResponse extends KeepAliveResponse {
@@ -17,6 +19,12 @@ interface DetailedStatusResponse extends KeepAliveResponse {
     sessionActive: boolean;
     lastPing: string;
     pingFrequency: number; // in minutes
+    autoDisconnect: 'disabled' | '4hours' | '8hours' | 'logout';
+}
+
+interface AutoDisconnectResponse {
+    success?: boolean;
+    autoDisconnect: 'disabled' | '4hours' | '8hours' | 'logout';
 }
 
 interface StartKeepAliveMessage {
@@ -34,7 +42,94 @@ let consecutiveFailures: number = 0;
 let lastPingTime: string = '';
 let currentPingFrequency: number = 4; // in minutes
 let sessionActive: boolean = false;
+let autoDisconnectMode: 'disabled' | '4hours' | '8hours' | 'logout' = 'disabled';
+let autoDisconnectTimer: string | null = null; // For 4/8 hour timers
 const MAX_CONSECUTIVE_FAILURES = 3;
+
+// Logout detection functionality
+let logoutDetectionAlarm: string | null = null;
+
+/**
+ * Sets up auto-disconnect based on the selected mode
+ */
+function setupAutoDisconnect(): void {
+    // Clear any existing timers/alarms
+    clearAutoDisconnect();
+    
+    if (autoDisconnectMode === 'disabled') {
+        return;
+    }
+    
+    if (autoDisconnectMode === 'logout') {
+        setupLogoutDetection();
+    } else if (autoDisconnectMode === '4hours' || autoDisconnectMode === '8hours') {
+        setupTimerDisconnect();
+    }
+    
+    console.log(`Auto-disconnect set to: ${autoDisconnectMode}`);
+}
+
+/**
+ * Sets up logout detection by monitoring system idle state
+ */
+function setupLogoutDetection(): void {
+    if (logoutDetectionAlarm) {
+        chrome.alarms.clear(logoutDetectionAlarm);
+    }
+    
+    logoutDetectionAlarm = 'logout-detection';
+    // Check every 30 seconds for idle state
+    chrome.alarms.create(logoutDetectionAlarm, { periodInMinutes: 0.5 });
+    
+    console.log('Logout detection enabled - monitoring system idle state');
+}
+
+/**
+ * Sets up timer-based auto-disconnect (4 or 8 hours)
+ */
+function setupTimerDisconnect(): void {
+    if (autoDisconnectTimer) {
+        chrome.alarms.clear(autoDisconnectTimer);
+    }
+    
+    const hours = autoDisconnectMode === '4hours' ? 4 : 8;
+    autoDisconnectTimer = `auto-disconnect-${hours}h`;
+    
+    chrome.alarms.create(autoDisconnectTimer, { 
+        delayInMinutes: hours * 60 
+    });
+    
+    console.log(`Auto-disconnect timer set for ${hours} hours`);
+}
+
+/**
+ * Removes all auto-disconnect mechanisms
+ */
+function clearAutoDisconnect(): void {
+    // Clear logout detection
+    if (logoutDetectionAlarm) {
+        chrome.alarms.clear(logoutDetectionAlarm);
+        logoutDetectionAlarm = null;
+    }
+    
+    // Clear timer-based disconnect
+    if (autoDisconnectTimer) {
+        chrome.alarms.clear(autoDisconnectTimer);
+        autoDisconnectTimer = null;
+    }
+    
+    console.log('Auto-disconnect cleared');
+}
+
+/**
+ * Handles idle state detection for logout
+ */
+chrome.idle.onStateChanged.addListener((state: chrome.idle.IdleState) => {
+    if (autoDisconnectMode === 'logout' && state === 'locked' && keepAlive === 'Running') {
+        console.log('System locked detected - stopping keep alive due to auto-disconnect setting');
+        stopKeepAlive();
+    }
+});
 
 // Persistence manager to handle service worker restarts
 class PersistenceManager {
@@ -44,10 +139,9 @@ class PersistenceManager {
         FAILURES: 'consecutiveFailures',
         LAST_PING: 'lastPingTime',
         FREQUENCY: 'pingFrequency',
-        SESSION_ACTIVE: 'sessionActive'
-    };
-
-    static async saveState(): Promise<void> {
+        SESSION_ACTIVE: 'sessionActive',
+        AUTO_DISCONNECT: 'autoDisconnectMode'
+    };    static async saveState(): Promise<void> {
         try {
             await chrome.storage.local.set({
                 [this.STORAGE_KEYS.KEEP_ALIVE_STATE]: keepAlive,
@@ -55,15 +149,14 @@ class PersistenceManager {
                 [this.STORAGE_KEYS.FAILURES]: consecutiveFailures,
                 [this.STORAGE_KEYS.LAST_PING]: lastPingTime,
                 [this.STORAGE_KEYS.FREQUENCY]: currentPingFrequency,
-                [this.STORAGE_KEYS.SESSION_ACTIVE]: sessionActive
+                [this.STORAGE_KEYS.SESSION_ACTIVE]: sessionActive,
+                [this.STORAGE_KEYS.AUTO_DISCONNECT]: autoDisconnectMode
             });
             console.log('State saved to storage');
         } catch (error) {
             console.error('Failed to save state:', error);
         }
-    }
-
-    static async loadState(): Promise<void> {
+    }    static async loadState(): Promise<void> {
         try {
             const result = await chrome.storage.local.get([
                 this.STORAGE_KEYS.KEEP_ALIVE_STATE,
@@ -71,7 +164,8 @@ class PersistenceManager {
                 this.STORAGE_KEYS.FAILURES,
                 this.STORAGE_KEYS.LAST_PING,
                 this.STORAGE_KEYS.FREQUENCY,
-                this.STORAGE_KEYS.SESSION_ACTIVE
+                this.STORAGE_KEYS.SESSION_ACTIVE,
+                this.STORAGE_KEYS.AUTO_DISCONNECT
             ]);
 
             keepAlive = result[this.STORAGE_KEYS.KEEP_ALIVE_STATE] || 'Stopped';
@@ -80,6 +174,7 @@ class PersistenceManager {
             lastPingTime = result[this.STORAGE_KEYS.LAST_PING] || '';
             currentPingFrequency = result[this.STORAGE_KEYS.FREQUENCY] || 4;
             sessionActive = result[this.STORAGE_KEYS.SESSION_ACTIVE] || false;
+            autoDisconnectMode = result[this.STORAGE_KEYS.AUTO_DISCONNECT] || 'disabled';
 
             console.log('State loaded from storage:', {
                 keepAlive,
@@ -87,14 +182,13 @@ class PersistenceManager {
                 consecutiveFailures,
                 lastPingTime,
                 currentPingFrequency,
-                sessionActive
+                sessionActive,
+                autoDisconnectMode
             });
         } catch (error) {
             console.error('Failed to load state:', error);
         }
-    }
-
-    static async clearState(): Promise<void> {
+    }    static async clearState(): Promise<void> {
         try {
             await chrome.storage.local.remove([
                 this.STORAGE_KEYS.KEEP_ALIVE_STATE,
@@ -102,7 +196,8 @@ class PersistenceManager {
                 this.STORAGE_KEYS.FAILURES,
                 this.STORAGE_KEYS.LAST_PING,
                 this.STORAGE_KEYS.FREQUENCY,
-                this.STORAGE_KEYS.SESSION_ACTIVE
+                this.STORAGE_KEYS.SESSION_ACTIVE,
+                this.STORAGE_KEYS.AUTO_DISCONNECT
             ]);
             console.log('State cleared from storage');
         } catch (error) {
@@ -301,7 +396,7 @@ async function stopKeepAlive(): Promise<void> {
     console.log('Keep-alive stopped and state saved');
 }
 
-// Chrome alarms listener for keep-alive pings
+// Chrome alarms listener for keep-alive pings and auto-disconnect
 chrome.alarms.onAlarm.addListener(async (alarm) => {
     if (alarm.name === 'keepAlive') {
         console.log('Alarm triggered: executing keep-alive ping');
@@ -318,6 +413,20 @@ chrome.alarms.onAlarm.addListener(async (alarm) => {
         } else {
             console.log('Keep-alive is stopped, not executing ping');
         }
+    } else if (alarm.name === 'logout-detection') {
+        // Check for idle state for logout detection
+        chrome.idle.queryState(15, (state) => {
+            if (state === 'locked' && keepAlive === 'Running') {
+                console.log('System locked detected via alarm - stopping keep alive');
+                stopKeepAlive();
+            }
+        });
+    } else if (alarm.name?.startsWith('auto-disconnect-')) {
+        // Timer-based auto-disconnect (4 or 8 hours)
+        const hours = alarm.name.includes('4h') ? 4 : 8;
+        console.log(`Auto-disconnect timer expired after ${hours} hours - stopping keep alive`);
+        await stopKeepAlive();
+        clearAutoDisconnect();
     }
 });
 
@@ -325,7 +434,7 @@ chrome.alarms.onAlarm.addListener(async (alarm) => {
 chrome.runtime.onMessage.addListener((
     request: KeepAliveMessage,
     sender: chrome.runtime.MessageSender,
-    sendResponse: (response: KeepAliveResponse | DetailedStatusResponse) => void
+    sendResponse: (response: KeepAliveResponse | DetailedStatusResponse | AutoDisconnectResponse) => void
 ): boolean => {
     console.log('Background received message:', request);
     
@@ -376,17 +485,29 @@ chrome.runtime.onMessage.addListener((
             };
             console.log('Sending status response:', response);
             sendResponse(response);
-            
-        } else if (request.action === 'getDetailedStatus') {
+              } else if (request.action === 'getDetailedStatus') {
             const detailedResponse: DetailedStatusResponse = {
                 status: keepAlive.toLowerCase() as 'running' | 'stopped',
                 url: url,
                 consecutiveFailures,
                 sessionActive,
                 lastPing: lastPingTime,
-                pingFrequency: currentPingFrequency
+                pingFrequency: currentPingFrequency,                autoDisconnect: autoDisconnectMode
             };
-            sendResponse(detailedResponse);
+            sendResponse(detailedResponse);          } else if (request.action === 'setAutoDisconnect') {
+            autoDisconnectMode = request.autoDisconnect || 'disabled';
+            await PersistenceManager.saveState();
+            
+            // Set up auto-disconnect based on the new mode
+            setupAutoDisconnect();
+            
+            console.log(`Auto-disconnect set to: ${autoDisconnectMode}`);
+            const autoResponse: AutoDisconnectResponse = { success: true, autoDisconnect: autoDisconnectMode };
+            sendResponse(autoResponse);
+            
+        } else if (request.action === 'getAutoDisconnect') {
+            const autoResponse: AutoDisconnectResponse = { autoDisconnect: autoDisconnectMode };
+            sendResponse(autoResponse);
         }
     })().catch(error => {
         console.error('Error handling message:', error);
@@ -426,16 +547,18 @@ chrome.runtime.onInstalled.addListener(async (details) => {
 // Restore state when service worker restarts
 async function restoreStateAndResume(): Promise<void> {
     try {
-        await PersistenceManager.loadState();
-        
-        console.log('Service worker restarted, restored state:', {
+        await PersistenceManager.loadState();        console.log('Service worker restarted, restored state:', {
             keepAlive,
             url,
             consecutiveFailures,
             sessionActive,
             lastPingTime,
-            currentPingFrequency
+            currentPingFrequency,
+            autoDisconnectMode
         });
+        
+        // Restore auto-disconnect setting
+        setupAutoDisconnect();
         
         // If keep-alive was running, resume it
         if (keepAlive === 'Running') {
